@@ -1,6 +1,7 @@
 from typing import List
 from joblib import load
 from os import getenv
+from functools import lru_cache
 
 from pandas.core.frame import DataFrame
 
@@ -9,15 +10,15 @@ import botocore
 from fastapi import FastAPI
 import pandas as pd
 
-BUCKET_NAME = "kueski-ml-system"
-FEATURES_KEY = "feature_store/2021/11/28/train_model_pyspark.parquet.gzip"
-FEATURES = "train_model_pyspark.parquet.gzip"
-MODEL_KEY = "models/2021/11/28/model_risk.joblib"
-MODEL = "model_risk.joblib"
+BUCKET_NAME = getenv("BUCKET_NAME")
+FEATURES_KEY = getenv("FEATURES_KEY")
+FEATURES = getenv("FEATURES")
+MODEL_KEY = getenv("MODEL_KEY")
+MODEL = getenv("MODEL")
 
 app = FastAPI()
 
-
+@lru_cache
 def download_file(bucket_name: str, file_key: str, file_local: str):
     print(f"Downloading file from S3 {bucket_name}/{file_key}")
     s3 = boto3.resource("s3")
@@ -33,6 +34,7 @@ def download_file(bucket_name: str, file_key: str, file_local: str):
 def format_features(
     user_id: int, drop_columns: List[str], features: DataFrame
 ) -> DataFrame:
+    print("Formatting features")
     features = features[features["id"] == user_id]
     features.sort_values(by=["loan_date"], ascending=False, inplace=True)
     first_row = features.head(1).copy()
@@ -59,6 +61,8 @@ def predict(user_id: int):
         return {"Message": "User not found"}
 
     df = format_features(user_id, ["status", "loan_date"], df)
+    print("Loading Model...")
     model = load(MODEL)
+    print("Predicting...")
     prediction = model.predict(df)
     return {"prediction": prediction.item(0)}
