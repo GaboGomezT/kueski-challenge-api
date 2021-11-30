@@ -1,3 +1,4 @@
+from typing import List
 from joblib import load
 from os import getenv
 
@@ -29,9 +30,14 @@ def download_file(bucket_name: str, file_key: str, file_local: str):
             raise
 
 
-@app.get("/")
-def read_root():
-    return {"Hello": "Mundo"}
+def format_features(
+    user_id: int, drop_columns: List[str], features: DataFrame
+) -> DataFrame:
+    features = features[features["id"] == user_id]
+    features.sort_values(by=["loan_date"], ascending=False, inplace=True)
+    first_row = features.head(1).copy()
+    first_row.drop(drop_columns, axis="columns", inplace=True)
+    return first_row
 
 
 @app.get("/features/{user_id}")
@@ -40,11 +46,8 @@ def get_features(user_id: int):
     df = pd.read_parquet(FEATURES)
     if not user_id in df["id"].unique():
         return {"Message": "User not found"}
-    df = df[df["id"] == user_id]
-    df.sort_values(by=["loan_date"], ascending=False, inplace=True)
-    first_row = df.head(1).copy()
-    first_row.drop(["id", "loan_date"], axis="columns", inplace=True)
-    return {"features": first_row.to_dict("records")[0]}
+    df = format_features(user_id, ["id", "loan_date"], df)
+    return {"features": df.to_dict("records")[0]}
 
 
 @app.get("/predict/{user_id}")
@@ -54,12 +57,8 @@ def predict(user_id: int):
     df = pd.read_parquet(FEATURES)
     if not user_id in df["id"].unique():
         return {"Message": "User not found"}
-    df = df[df["id"] == user_id]
-    df.sort_values(by=["loan_date"], ascending=False, inplace=True)
-    first_row = df.head(1).copy()
-    first_row.drop(["status", "loan_date"], axis="columns", inplace=True)
-    print(first_row)
 
+    df = format_features(user_id, ["status", "loan_date"], df)
     model = load(MODEL)
-    prediction = model.predict(first_row)
+    prediction = model.predict(df)
     return {"prediction": prediction.item(0)}
