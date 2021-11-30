@@ -48,7 +48,7 @@ def get_features(user_id: int):
     df = pd.read_parquet(FEATURES)
     if not user_id in df["id"].unique():
         return {"Message": "User not found"}
-    df = format_features(user_id, ["id", "loan_date"], df)
+    df = format_features(user_id, ["id", "loan_date", "status"], df)
     return {"features": df.to_dict("records")[0]}
 
 
